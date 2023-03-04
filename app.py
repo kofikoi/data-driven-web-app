@@ -1,41 +1,65 @@
+import csv
 from flask import Flask, render_template
 from flask_sqlalchemy import SQLAlchemy
-import csv
+from sqlalchemy.exc import IntegrityError
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///mydatabase.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///movies.db'
 db = SQLAlchemy(app)
 
 class Actor(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50), nullable=False)
-    movies = db.relationship('Movie', backref='actor', lazy=True)
+    name = db.Column(db.String(80), unique=True, nullable=False)
+
+    def __repr__(self):
+        return '<Actor %r>' % self.name
 
 class Movie(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(50), nullable=False)
-    actor_id = db.Column(db.Integer, db.ForeignKey('actor.id'), nullable=False)
+    title = db.Column(db.String(120), unique=True, nullable=False)
+    year = db.Column(db.Integer, nullable=False)
+    actors = db.relationship('Actor', secondary='movie_actor', backref=db.backref('movies', lazy='dynamic'))
+
+    def __repr__(self):
+        return '<Movie %r>' % self.title
+
+class MovieActor(db.Model):
+    movie_id = db.Column(db.Integer, db.ForeignKey('movie.id'), primary_key=True)
+    actor_id = db.Column(db.Integer, db.ForeignKey('actor.id'), primary_key=True)
+
+    def __repr__(self):
+        return '<MovieActor %r-%r>' % (self.movie_id, self.actor_id)
 
 
 
 def load_data():
-    with open('movies.csv') as f:
-        reader = csv.reader(f)
+    with open('movies.csv', 'r', encoding='utf-8') as file:
+        reader = csv.reader(file)
         next(reader) # skip the header row
+        count = 0
         for row in reader:
             # Create an Actor object for each actor in the row
             actors = []
             for actor_name in row[2].split(','):
-                actor = Actor(name=actor_name.strip())
-                db.session.add(actor)
-                actors.append(actor)
+                try:
+                    actor = Actor(name=actor_name.strip())
+                    db.session.add(actor)
+                    actors.append(actor)
+                except IntegrityError:
+                    db.session.rollback()
+                    continue
 
             # Create a Movie object for the row, linking it to the actors
             movie = Movie(title=row[0], year=row[1])
             movie.actors = actors
             db.session.add(movie)
+            try:
+                db.session.commit()
+                count += 1
+            except IntegrityError:
+                db.session.rollback()
+        print(f"{count} records were added to the database")
 
-    db.session.commit()
 
 
 @app.route('/')
@@ -43,7 +67,20 @@ def index():
     movies = Movie.query.all()
     return render_template('index.html', movies=movies)
 
-# Create the database and load the data
+@app.route('/actors')
+def actors():
+    actors = Actor.query.all()
+    return render_template('actors.html', actors=actors)
+
+@app.route('/movie/<int:movie_id>')
+def movie_detail(movie_id):
+    movie = Movie.query.get(movie_id)
+    return render_template('movie.html', movie=movie)
+
 if __name__ == '__main__':
-    db.create_all()
-    load_data()
+    with app.app_context():
+        db.create_all()
+        load_data()
+    app.run(debug=True)
+
+
