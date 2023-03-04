@@ -77,6 +77,10 @@ def movie_detail(movie_id):
     movie = Movie.query.get(movie_id)
     return render_template('movie.html', movie=movie)
 
+@app.errorhandler(404)
+def not_found(error):
+    return render_template('404.html'), 404
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
