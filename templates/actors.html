@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Actors</title>
+  </head>
+  <body>
+    <h1>Actors</h1>
+    <ul>
+      {% for actor in actors %}
+      <li>{{ actor.name }} - {% for movie in actor.movies %}<a href="/movie/{{ movie.id }}">{{ movie.title }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</li>
+      {% endfor %}
+    </ul>
+  </body>
+</html>
